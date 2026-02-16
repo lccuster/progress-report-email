@@ -425,6 +425,7 @@ def api_scrape():
 
 # made to get a list of students for the class
 def get_students():
+    #TODO: Add something that captures the student's section. This may be more involved than the users API.
 
     with open("./userdata/config.json", "r") as readfile:
         config = json.load(readfile)
@@ -513,20 +514,27 @@ def make_config():
         json.dump(config, writefile, indent=4)
         writefile.close()
 
-def get_weeks() -> str:
+def get_week() -> str:
 
     with open("./userdata/modules.json", "r") as readfile:
         modules = json.load(readfile)
         module_names = list(modules.keys())
         readfile.close()
     
-    print("Which of the following modules do you want to send? All modules above (before) it will be sent as the course component.\n")
+    print("Which of the following modules do you want to send? All modules prior to the first will be sent. \nYou can group multiple by separating them by commas, like so: 1,2,3.\n")
 
     for index, module in enumerate(module_names):
         print(f"{index+1}) {module}")
     print("\n")
-    tosend = int(input("Enter the number next to the module you want to send: "))
-    print(tosend-1)
+    input_string = str(input("Enter the number next to the module you want to send: "))
+    temp = []
+    tosend = []
+    for value in input_string.split(","):
+        temp.append(int(value.strip())-1)
+    temp = list(set(sorted(temp)))
+    for value in temp:
+        tosend.append(module_names[value-1])
+    print(tosend)
     return module_names[tosend-1]
 
 def canvas_assignment_dump():
@@ -542,3 +550,67 @@ def canvas_assignment_dump():
     export = json.loads(r.text)
     with open("./userdata/canvas_assignments_dump.json", "w") as file:
         json.dump(export, file, indent=4)
+
+# A Function that allows command line editing of the modules. Primarily intended to be used to combine modules from the course. 
+# Can also be used for renames, cleanup, etc. A generally useful function.
+def combine_modules(weeks, newname):
+    # Bit of fluff for reading
+    print("\n")
+
+    with open("./userdata/modules.json", "r") as readfile:
+        modules = json.load(readfile)
+        readfile.close()
+
+    # Create the newmodule as a separate unit at first; in case it shares name with existing module
+    newmodule = {"id":-1, "name":newname, "assignments":[]}
+
+    # Process modules, copying their assignments over and deleting the existing old modules.
+    for module in weeks:
+        newmodule["assignments"] += modules[module]["assignments"]
+        del modules[module]
+
+    # Now that removals are done, copy the new module into the file
+    modules[newname] = newmodule
+
+    # Save it
+    with open("./userdata/modules.json", "w") as file:
+        json.dump(modules, file, indent=4)
+
+
+
+# This function works a lot like get_week(), but returns a list instead of a string. They could be combined,
+# but in some cases forcing only a single option is better data safety. This is used for combine_modules().
+def get_weeks() -> list:
+
+    # Read modules and get names...
+    with open("./userdata/modules.json", "r") as readfile:
+        modules = json.load(readfile)
+        module_names = list(modules.keys())
+        readfile.close()
+
+    # Print out the indicides for each module and their name; note the +1
+    for index, module in enumerate(module_names):
+        print(f"{index+1}) {module}")
+
+    # Instructions
+    print("\nWhich of the following modules do you want to combine? Separate module numbers with commas.\n")
+    tosend = str(input("Enter the numbers next to the modules you want to combine: "))
+    print("\n")
+    
+    # Strip all spaces
+    tosend = tosend.replace(" ", "")
+
+    # Make it into a list of strings
+    modules_to_send = tosend.split(",")
+
+    # Sort those strings; this is important to keep modules in order.
+    modules_to_send = sorted(modules_to_send)
+    
+    # Prepare export list
+    return_mods = []
+
+    # Append each module desired to return list
+    for module in modules_to_send:
+        return_mods.append(module_names[int(module)-1])
+    
+    return return_mods

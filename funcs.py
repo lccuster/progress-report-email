@@ -299,7 +299,7 @@ def make_emails(current_week):
         late_assignment_list = ""
         for week in weeks_to_send:
             for assignment in week_map[week]["assignments"]:
-                if is_missing(students[student]["id"], api_dict[assignment]):
+                if is_missing(students[student]["id"], api_dict[assignment]) and assignment_dict[assignment]["showonlatelist"] != "False":
                     actualcompleted -= 1
                     late_assignment_list += "- "+assignment+"\n"
 
@@ -461,7 +461,9 @@ def get_students():
                 r2 = requests.get(query2)
             student = json.loads(r2.text)[0]
             if student["role"] == "StudentEnrollment":
-                students_dict[student["user"]["login_id"]] = {"name":student["user"]["sortable_name"], "email":student["user"]["login_id"]+"@charlotte.edu", "id":student["user"]["id"]}
+                student_id = student["user"]["login_id"]
+                print(f"found student: {student_id}")
+                students_dict[student_id] = {"name":student["user"]["sortable_name"], "email":student["user"]["login_id"]+"@charlotte.edu", "id":student["user"]["id"]}
         page += 1
 
     with open("./userdata/students.json", "w") as writefile:

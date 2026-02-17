@@ -33,13 +33,13 @@ while run:
             funcs.api_scrape()
             feedback = 'Successfully pulled assignment data!'
         case 3:
-            funcs.canvas_api(funcs.get_week())
+            funcs.canvas_api(funcs.select_one_from_list(funcs.get_week_names()))
             feedback = 'Successfully pulled submission data!'
         case 4:
             funcs.check()
             feedback = 'Ran Check!'
         case 5:
-            funcs.make_emails(funcs.get_week())
+            funcs.make_emails(funcs.select_one_from_list(funcs.get_week_names()))
             feedback = 'Successfully made email in ./exports!'
         case 6:
             run = False
@@ -47,7 +47,7 @@ while run:
             funcs.combine_modules(funcs.get_weeks(), input("\nWhat would you like to rename these modules to? "))
             feedback = ""
         case 8:
-            funcs.change_late_list(funcs.get_week())
+            funcs.change_late_list(funcs.select_one_from_list(funcs.get_week_names()))
             feedback = ""
         case 20:
             funcs.canvas_assignment_dump()

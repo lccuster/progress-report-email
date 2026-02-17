@@ -629,12 +629,14 @@ def change_late_list(week):
         readfile.close()
 
     current_weeks = weeks[:weeks.index(week):-1] + [week]
+
+    print(current_weeks)
     
     current_assignments = []
     for week in current_weeks:
         for assignment in modules[week]["assignments"]:
             current_assignments.append(assignment)
-    
+    print(current_assignments)
     on_list = []
     off_list = []
     for assignment in current_assignments:
@@ -649,6 +651,42 @@ def change_late_list(week):
     choice = int(input("Enter Choice (0 or 1): "))
 
 def flip_late_status(weeks):
+    return 0
+def select_one_from_list(stuff, resource_name="module"):
+    for index, item in enumerate(stuff):
+        print(f"{index+1}) {item}")
+    print("\n")
+    input_string = int(input(f"Enter the number next to the {resource_name} you want to use: "))
+    return stuff[input_string-1]
 
-def select_from_list(stuff):
+
+def select_many_from_list(stuff, resource_name="module"):
+    for index, item in enumerate(stuff):
+        print(f"{index+1}) {item}")
+
+    # Instructions
+    print(f"\nWhich of the following modules do you want to combine? Separate {resource_name} numbers with commas.\n")
+    tosend = str(input(f"Enter the numbers next to the {resource_name} you want to use: "))
+    print("\n")
+    
+    # Strip all spaces
+    tosend = sorted(tosend.replace(" ", "").split(","))
+    
+    # Prepare export list
+    return_items = []
+
+    # Append each module desired to return list
+    for item in tosend:
+        return_items.append(stuff[int(item)-1])
+
+    return return_items
+
+def get_week_names() -> list:
+    with open("./userdata/modules.json", "r") as readfile:
+        modules = json.load(readfile)
+        module_names = list(modules.keys())
+        readfile.close()
+    return module_names
+
+
     

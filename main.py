@@ -20,7 +20,7 @@ while run:
     1) Get Course Student List \t\t 2) Get Course Assignments
     3) Pull Current Assignment Details \t 4) Check Files (Deprecated)
     5) Make Emails \t\t\t 6) Exit
-          7) Combine/Rename Modules""")
+    7) Combine/Rename Modules""")
     command = int(input())
     match command:
         case 0:
@@ -45,6 +45,9 @@ while run:
             run = False
         case 7:
             funcs.combine_modules(funcs.get_weeks(), input("\nWhat would you like to rename these modules to? "))
+            feedback = ""
+        case 8:
+            funcs.change_late_list(funcs.get_week())
             feedback = ""
         case 20:
             funcs.canvas_assignment_dump()

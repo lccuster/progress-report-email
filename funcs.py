@@ -328,6 +328,9 @@ def make_emails(current_week):
 # new function: this is being written to utilize the api to pull assignments, removing the need for the gradebook.
 # other stuff will have to be rewritten, but this is the start of the pipeline.
 def api_scrape():
+
+    keys = ["name", "id", "missingif", "duedate", "duetimestamp", "showonlatelist"]
+    defaults = ["No Name Found", 000000, "api", "2016-10-05 12:00:00", 1475683200.0, "True"]
     
     with open("./userdata/config.json", "r") as readfile:
         config = json.load(readfile)
@@ -376,7 +379,12 @@ def api_scrape():
                 assignments[assignment["name"]]["duedate"] = datetime.datetime.fromtimestamp(1475683200)
             assignments[assignment["name"]]["duetimestamp"] = assignments[assignment["name"]]["duedate"].timestamp()
 
-
+            assignments[assignment["name"]]["showonlatelist"] = "False"
+        
+        else:
+            for index, key in enumerate(keys):
+                if key not in assignments[assignment["name"]]:
+                    assignments[assignment["name"]][key] = defaults[index]
 
     sorts = sorted(list(assignments.items()), key=lambda x: x[1]["duetimestamp"])
     export = {}
@@ -523,21 +531,13 @@ def get_week() -> str:
         module_names = list(modules.keys())
         readfile.close()
     
-    print("Which of the following modules do you want to send? All modules prior to the first will be sent. \nYou can group multiple by separating them by commas, like so: 1,2,3.\n")
+    print("Which of the following modules do you want to send? All modules prior to the first will be sent.")
 
     for index, module in enumerate(module_names):
         print(f"{index+1}) {module}")
     print("\n")
-    input_string = str(input("Enter the number next to the module you want to send: "))
-    temp = []
-    tosend = []
-    for value in input_string.split(","):
-        temp.append(int(value.strip())-1)
-    temp = list(set(sorted(temp)))
-    for value in temp:
-        tosend.append(module_names[value-1])
-    print(tosend)
-    return module_names[tosend-1]
+    input_string = int(input("Enter the number next to the module you want to send: "))
+    return module_names[input_string-1]
 
 def canvas_assignment_dump():
     with open("./userdata/config.json", "r") as readfile:
@@ -616,3 +616,39 @@ def get_weeks() -> list:
         return_mods.append(module_names[int(module)-1])
     
     return return_mods
+
+def change_late_list(week):
+
+    with open("./userdata/modules.json", "r") as readfile:
+        modules = json.load(readfile)
+        weeks = list(modules.keys())[::-1]
+        readfile.close()
+
+    with open("./userdata/assignments.json", "r") as readfile:
+        assignments = json.load(readfile)
+        readfile.close()
+
+    current_weeks = weeks[:weeks.index(week):-1] + [week]
+    
+    current_assignments = []
+    for week in current_weeks:
+        for assignment in modules[week]["assignments"]:
+            current_assignments.append(assignment)
+    
+    on_list = []
+    off_list = []
+    for assignment in current_assignments:
+        if assignments[assignment]["showonlatelist"] == "True":
+            on_list.append(assignment)
+        else:
+            off_list.append(assignment)
+    
+    print(on_list)
+
+    print("Do you want to remove (0) or add (1) assignments to the late list?")
+    choice = int(input("Enter Choice (0 or 1): "))
+
+def flip_late_status(weeks):
+
+def select_from_list(stuff):
+    

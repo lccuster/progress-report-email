@@ -299,12 +299,13 @@ def make_emails(current_week):
         late_assignment_list = ""
         for week in weeks_to_send:
             for assignment in week_map[week]["assignments"]:
-                if is_missing(students[student]["id"], api_dict[assignment]) and assignment_dict[assignment]["showonlatelist"] != "False":
+                if is_missing(students[student]["id"], api_dict[assignment]):
+                    if assignment_dict[assignment]["showonlatelist"] != "False":
+                        late_assignment_list += "- "+assignment+"\n"
                     actualcompleted -= 1
-                    late_assignment_list += "- "+assignment+"\n"
 
         # if anything is missing, we throw on this line for the email.
-        if actualcompleted != totalcomplete:
+        if late_assignment_list != "":
             late_assignment_list = "In order to catch up, you can complete the following assignments:\n" + late_assignment_list
 
         # this appends everything as it'll go into the export. Pretty clear. 
@@ -617,7 +618,7 @@ def get_weeks() -> list:
     
     return return_mods
 
-def change_late_list(week):
+def change_late_list(week) -> None:
 
     with open("./userdata/modules.json", "r") as readfile:
         modules = json.load(readfile)
@@ -629,14 +630,12 @@ def change_late_list(week):
         readfile.close()
 
     current_weeks = weeks[:weeks.index(week):-1] + [week]
-
-    print(current_weeks)
     
     current_assignments = []
     for week in current_weeks:
         for assignment in modules[week]["assignments"]:
             current_assignments.append(assignment)
-    print(current_assignments)
+
     on_list = []
     off_list = []
     for assignment in current_assignments:
@@ -644,14 +643,37 @@ def change_late_list(week):
             on_list.append(assignment)
         else:
             off_list.append(assignment)
-    
-    print(on_list)
 
     print("Do you want to remove (0) or add (1) assignments to the late list?")
     choice = int(input("Enter Choice (0 or 1): "))
 
-def flip_late_status(weeks):
-    return 0
+    if choice == 1:
+        flip_items = select_many_from_list(off_list, "assignment")
+    else:
+        flip_items = select_many_from_list(on_list, "assignment")
+
+    flip_late_status(flip_items)
+
+
+
+# I wrote this as a standalone just in case this is useful somewhere else.
+def flip_late_status(assignments):
+
+    assignment_data = get_assignments()
+
+    for assignment in assignments:
+        if assignment_data[assignment]["showonlatelist"] == "True":
+            assignment_data[assignment]["showonlatelist"] = "False"
+        else:
+            assignment_data[assignment]["showonlatelist"] = "True"
+
+    with open('./userdata/assignments.json', 'w') as writefile:
+            json.dump(assignment_data, writefile, indent=4)
+            writefile.close()
+    
+
+    
+
 def select_one_from_list(stuff, resource_name="module"):
     for index, item in enumerate(stuff):
         print(f"{index+1}) {item}")
@@ -665,7 +687,7 @@ def select_many_from_list(stuff, resource_name="module"):
         print(f"{index+1}) {item}")
 
     # Instructions
-    print(f"\nWhich of the following modules do you want to combine? Separate {resource_name} numbers with commas.\n")
+    print(f"\nWhich of the following {resource_name} do you want to use? Separate {resource_name} numbers with commas.\n")
     tosend = str(input(f"Enter the numbers next to the {resource_name} you want to use: "))
     print("\n")
     
@@ -687,6 +709,19 @@ def get_week_names() -> list:
         module_names = list(modules.keys())
         readfile.close()
     return module_names
+
+def get_week_data() -> dict:
+    with open("./userdata/modules.json", "r") as readfile:
+        modules = json.load(readfile)
+        readfile.close()
+    return modules
+
+# I'm going to try and make more funcs like this, so we can be more modular.
+def get_assignments() -> dict:
+    with open("./userdata/assignments.json", "r") as file:
+        assignment_dict = json.load(file)
+        file.close()
+    return assignment_dict
 
 
     

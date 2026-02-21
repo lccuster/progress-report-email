@@ -169,15 +169,37 @@ def make_emails(current_week) -> None:
     week_map = get_week_data()
 
     weeks = get_week_names()
-    
-    weeks_to_send = []
-
-    week_index = weeks.index(current_week)
-    for week in weeks[week_index:]:
-        weeks_to_send.append(week)
 
     include_items = config['REPORT']["include"].keys()
     field_name_dict = config['REPORT']["include"]
+
+    field_names = []
+    for item in include_items:
+        field_names.append(config['REPORT']['include'][item]['fieldname'])
+
+    customization_dict = {}
+
+    for item in include_items:
+        customization_dict[item] = {}
+        customization_dict[item]["child"] = {}
+        if item in config['REPORT']['customization'].keys():
+            customization_dict[item]["prefix"] = config['REPORT']['customization'][item]["prefix"]
+            customization_dict[item]["postfix"] = config['REPORT']['customization'][item]["postfix"]
+            if "child" in config['REPORT']['customization'][item].keys():
+                customization_dict[item]["child"]["prefix"] = config['REPORT']['customization'][item]["child"]["prefix"]
+                customization_dict[item]["child"]["postfix"] = config['REPORT']['customization'][item]["child"]["postfix"]
+            else:
+                customization_dict[item]["child"]["prefix"] = ""
+                customization_dict[item]["child"]["postfix"] = ""
+        else:
+            customization_dict[item]["prefix"] = ""
+            customization_dict[item]["postfix"] = ""
+            customization_dict[item]["child"]["prefix"] = ""
+            customization_dict[item]["child"]["postfix"] = ""
+
+    print(weeks.index(current_week))
+    weeks_to_send = weeks[:weeks.index(current_week)] + [current_week]
+    print(weeks_to_send)
 
     # pulls all the assignments that are relevant 
     current_assignments = []
@@ -196,20 +218,23 @@ def make_emails(current_week) -> None:
     # logic to get the list of assignments mapped to the current module
     
     if "assignment_list" in include_items:
+        item = "assignment_list"
         assignment_list = ""
         for assignment in week_map[current_week]["assignments"]:
             # this logic cuts the numbers from the assignment when sending it to students.
-            assignment_list += "- "+assignment+"\n"
+            assignment_list += customization_dict[item]["child"]["prefix"]+assignment+customization_dict[item]["child"]["postfix"]
 
     # counts the total number of assignments which have been due so far, sums the number of assignments in each module.
-    totalcomplete = 0
-    for week in weeks_to_send:
-        totalcomplete += len(week_map[week]["assignments"])
+    if "total_complete" in include_items or "late_assignment_list" in include_items or "actual_completed" in include_items:
+        total_complete = 0
+        for week in weeks_to_send:
+            total_complete += len(week_map[week]["assignments"])
 
     # counts the total number of assignments due so far too. I believe I changed this code at some point due to a non-Yfunctional output. 
-    totalcourse = 0
-    for week in weeks:
-        totalcourse += len(week_map[week]["assignments"])
+    if "total_course_assignments" in include_items:
+        total_course_assignments = 0
+        for week in weeks:
+            total_course_assignments += len(week_map[week]["assignments"])
 
 
     # okay, time for the meat of the function.
@@ -220,56 +245,74 @@ def make_emails(current_week) -> None:
 
         #eventually this could probably be a series of function calls that pass these things... womp womp
         if "name" in include_items:
-            entry_dict[field_name_dict["name"]["fieldname"]] = students[student]["name"].split(", ")[-1]
+            item = "name"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+students[student]["name"].split(", ")[-1]+customization_dict[item]["postfix"]
         # grab student email
         if "email" in include_items:
             entry_dict[field_name_dict["email"]["fieldname"]] = students[student]["email"]
         
         if "module" in include_items:
-            entry_dict[field_name_dict["module"]["fieldname"]] = module
+            item = "module"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+module+customization_dict[item]["postfix"]
 
         if "assignment_count" in include_items:
-            entry_dict[field_name_dict["assignment_count"]["fieldname"]] = assignment_count
+            item = "assignment_count"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(assignment_count)+customization_dict[item]["postfix"]
 
         if "assignment_list" in include_items:
-            entry_dict[field_name_dict["assignment_list"]["fieldname"]] = assignment_list
+            item = "assignment_list"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(assignment_list)+customization_dict[item]["postfix"]
 
-        
-        
+        if "total_course_assignments" in include_items:
+            item = "total_course_assignments"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(total_course_assignments)+customization_dict[item]["postfix"]
+
+        if "total_complete" in include_items:
+            item = "total_complete"
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(total_complete)+customization_dict[item]["postfix"]
+
         # for the module, set the total completed to the max that can be. If something isn't complete, mark it as missing, and decrease the count.
         if "module_completed" in include_items:
+            item = "module_completed"
             module_completed = assignment_count
             for assignment in week_map[current_week]["assignments"]:
                 if is_missing(students[student]["id"], api_dict[assignment]):
                     module_completed -= 1
-            entry_dict[field_name_dict["assignment_list"]["fieldname"]] = module_completed
+            entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(module_completed)+customization_dict[item]["postfix"]
+            
 
         # same thing as before, BUT we're now going over the entire course. We also keep a record of the names of late assignments.
         # we do this so we can send the students a list of the assignments they can work on.
-        actualcompleted = totalcomplete
-        late_assignment_list = ""
-        for week in weeks_to_send:
-            for assignment in week_map[week]["assignments"]:
-                if is_missing(students[student]["id"], api_dict[assignment]):
-                    if assignment_dict[assignment]["showonlatelist"] != "False":
-                        late_assignment_list += "- "+assignment+"\n"
-                    actualcompleted -= 1
+        if "actual_completed" in include_items or late_assignment_list in include_items:
+            item = "late_assignment_list"
+            actual_completed = total_complete
+            late_assignment_list = ""
+            for week in weeks_to_send:
+                for assignment in week_map[week]["assignments"]:
+                    if is_missing(students[student]["id"], api_dict[assignment]):
+
+                        if assignment_dict[assignment]["showonlatelist"] != "False" and "late_assignment_list" in include_items:
+                            late_assignment_list += customization_dict[item]["child"]["prefix"]+assignment+customization_dict[item]["child"]["postfix"]
+                        
+                        actual_completed -= 1
+            if "actual_completed" in include_items:
+                item = "actual_completed"
+                entry_dict[field_name_dict[item]["fieldname"]] = customization_dict[item]["prefix"]+str(actual_completed)+customization_dict[item]["postfix"]
 
         # if anything is missing, we throw on this line for the email.
-        if late_assignment_list != "":
-            late_assignment_list = "In order to catch up, you can complete the following assignments:\n" + late_assignment_list
+        if "late_assignment_list" in include_items and late_assignment_list != "":
+            item = "late_assignment_list"
+            entry_dict[field_name_dict[item]["fieldname"]] =  customization_dict[item]["prefix"]+late_assignment_list+customization_dict[item]["postfix"]
 
         # this appends everything as it'll go into the export. Pretty clear. 
-        data.append({"Assignment List":assignmentlist, "Module Completed":module_completed, "Actual Completed Assigments":actualcompleted,
-        "Total Assignments in Course":totalcourse, "Total Complete":totalcomplete, "Late Assignments":late_assignment_list})
+        data.append(entry_dict)
     # logic to catch naming conventions based on OS
     if ":" in week_map[week]['name']:
         file = open(f"exports/Report - {week_map[week]['name'].split(':')[0]}.csv", "w", newline="")
     else:
         file = open(f"exports/Report - {week_map[week]['name']}.csv", "w", newline="")
     # write everything
-    writer = csv.DictWriter(file, fieldnames=["Email Address", "Student", "Module", "Assignment Count", "Assignment List",
-    "Module Completed", "Actual Completed Assigments", "Total Assignments in Course", "Total Complete", "Late Assignments"])
+    writer = csv.DictWriter(file, fieldnames=field_names)
     writer.writeheader()
     writer.writerows(data)
     file.close()
@@ -472,7 +515,8 @@ def make_config() -> None:
     config['API'] = {'apikey':'your_api_key_here', 'course':'your_course_here'}
     config['REPORT'] = {'customization':{}, 'include':{}}
 
-    config['REPORT']['customization'] = {"late_assignment_list": {"prefix": "","postfix": "","late_assignment_item": {"prefix": "","postfix": ""}}}  
+    config['REPORT']['customization'] = {"late_assignment_list": {"prefix": "","postfix": "","child": {"prefix": "- ","postfix": "\n"}},
+                                         "assignment_list": {"prefix": "","postfix": "","child": {"prefix": "- ","postfix": "\n"}}}  
 
     for index, element in enumerate(elements):
         config['REPORT']['include'][element] = {"fieldname":default_element_names[index]}
@@ -578,7 +622,7 @@ def change_late_list(week) -> None:
         assignments = json.load(readfile)
         readfile.close()
 
-    current_weeks = weeks[:weeks.index(week):-1] + [week]
+    current_weeks = weeks[:weeks.index(week)] + [week]
     
     current_assignments = []
     for week in current_weeks:

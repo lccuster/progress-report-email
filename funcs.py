@@ -12,73 +12,14 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-### imported from checker ###
-# Check is a function that makes sure that files which are scraped (and put into assignments.txt) are properly set up.
-# honestly, we need something better than this long term, but its better to have it than not.
-def check():
-
-    # open the api file
-    with open("./userdata/api.json", "r") as file:
-        # the strips on the below line help remove random whitespace from canvas imports
-        api_assignments = list(map(str.rstrip, list(json.load(file).keys())))
-        file.close()
-
-    # open the assignments json (handmade)
-    with open("./userdata/assignments.json", "r") as file:
-        assignment_dict = json.load(file)
-        # the strips on the below line help remove random whitespace from canvas imports
-        current_assignments = list(map(str.rstrip, list(assignment_dict.keys())))
-        file.close()
-
-    # open the modules json (handmade)  
-    with open("./userdata/modules.json", "r") as file:
-        week_map = json.load(file)
-        # this is a temp list used to hold all the assignments which have modules ("weeks").
-        assignments_in_modules = []
-        # this just adds all assignments in each module to the list
-        for week in list(week_map.keys()):
-            assignments_in_modules += week_map[week]["assignments"]
-        # same thing, strips whitespace
-        assignments_in_modules = list(map(str.rstrip, assignments_in_modules))
-        file.close()
-
-
-    # this pulls the assignment names from output of the scraper.
-    assignments = []
-    with open("assignments.txt", "r") as file:
-        for line in file:
-            assignments.append(line.rstrip())
-    
-    # the print statements on each of these lines gives you a rough idea of what its checking for. Again, better to have it than not,
-    # but we need a better long term solution.
-    for assignment in assignments:
-        if assignment not in current_assignments:
-            print(f"\nWarning! '{assignment}' from assignments.txt not in assignments.json!")
-
-    for assignment in current_assignments:
-        if assignment not in assignments_in_modules:
-            print(f"\nWarning! '{assignment}' from assignments.json not in modules.json!")
-        if assignment_dict[assignment]["missingif"] == 'api':
-            if assignment not in api_assignments:
-                print(f"\nCRITICAL WARNING!!! '{assignment}' from assignments.json not in api.json! (run api_handler.py)")
-
-    for assignment in assignments_in_modules:
-        if assignment not in current_assignments:
-            print(f"\nCRITICAL WARNING!!! '{assignment}' from modules.json not in assignments.json!")
-    print("\n")
-
-
-
 ### imported from api_handler ###
 # this handles the CanvasAPI scraping of assignment submissions. There's a whole system to how these exports work,
 # and I think we should migrate to just using the api for everything. We can leave the old functionality in here under
 # some legacy code (could help in working with non-Canvas systems in the future), but right now the entire scope of this
 # project exists in Canvas.
-def canvas_api(current_week):
+def canvas_api(current_week) -> None:
     
-    with open("./userdata/config.json", "r") as readfile:
-        config = json.load(readfile)
-        readfile.close()
+    config = get_config()
 
     # a lot of this config reading (which we may add more) can eventually be put somewhere less scoped
     apikey = config["API"]["apikey"]
@@ -86,16 +27,12 @@ def canvas_api(current_week):
 
     # right now we determine what assignments to pull based on the "./userdata/assignments.json" file. If a given assignment has
     # the api listed as its submission criterion, it pulls it here. Otherwise, we ignore it.
-    with open("./userdata/assignments.json", "r") as file:
-        assignment_dict = json.load(file)
-        file.close()
+    assignment_dict = get_assignments()
 
     # this scopes the API usage so that we're not pulling everything in the class all at once. I'll be so real;
     # we can pull everything all at once. It's not that much of a problem.    
-    with open("./userdata/modules.json", "r") as file:
-        week_map = json.load(file)
-        weeks = list(week_map.keys())[::-1]
-        file.close()
+    week_map = get_week_data()
+    weeks = get_week_names()
     
     weeks_to_send = []
 
@@ -171,10 +108,9 @@ def canvas_api(current_week):
 ### imported from assignment_scraper ###
 # this file can get completely trashed. We should move over to canvas API for this.
 # I won't comment the code since the goal is to not have it anymore.
-def scrape_assignments():
-    with open("./userdata/assignments.json", "r") as file:
-        assignment_dict = json.load(file)
-        file.close()
+def scrape_assignments() -> None:
+    
+    assignment_dict = get_assignments()
 
     workfile = ""
 
@@ -218,25 +154,21 @@ def is_missing(student, api_dict):
 # this is the big one. This is what actually produces the output file that is used to send emails.
 # it's a big func, so i'll try to be clear with everything that happens.
 # longterm, I think we should rewrite this to be more modular and customizable by users.
-def make_emails(current_week):
+def make_emails(current_week) -> None:
     # get all assignments controlled by the api
-    with open("./userdata/api.json", "r") as file:
-        api_dict = json.load(file)
-        file.close()
+    api_dict = get_api_data()
 
     # open all assignments currently known by the tool
-    with open("./userdata/assignments.json", "r") as file:
-        assignment_dict = json.load(file)
-        file.close()
 
-    with open("./userdata/students.json", "r") as file:
-        students = json.load(file)
-        file.close()
+    config = get_config()
 
-    with open("./userdata/modules.json", "r") as file:
-        week_map = json.load(file)
-        weeks = list(week_map.keys())[::-1]
-        file.close()
+    assignment_dict = get_assignments()
+
+    students = get_student_data()
+
+    week_map = get_week_data()
+
+    weeks = get_week_names()
     
     weeks_to_send = []
 
@@ -244,9 +176,8 @@ def make_emails(current_week):
     for week in weeks[week_index:]:
         weeks_to_send.append(week)
 
-
-    # sweet line
-    workfile = ""
+    include_items = config['REPORT']["include"].keys()
+    field_name_dict = config['REPORT']["include"]
 
     # pulls all the assignments that are relevant 
     current_assignments = []
@@ -263,10 +194,12 @@ def make_emails(current_week):
     module = week_map[current_week]["name"]
     assignment_count = len(week_map[current_week]["assignments"])
     # logic to get the list of assignments mapped to the current module
-    assignmentlist = ""
-    for assignment in week_map[current_week]["assignments"]:
-        # this logic cuts the numbers from the assignment when sending it to students.
-        assignmentlist += "- "+assignment+"\n"
+    
+    if "assignment_list" in include_items:
+        assignment_list = ""
+        for assignment in week_map[current_week]["assignments"]:
+            # this logic cuts the numbers from the assignment when sending it to students.
+            assignment_list += "- "+assignment+"\n"
 
     # counts the total number of assignments which have been due so far, sums the number of assignments in each module.
     totalcomplete = 0
@@ -283,15 +216,33 @@ def make_emails(current_week):
     data = []
     for student in students:
         # grab the first item, and get their first name (Canvas stores Last, First)
-        name = students[student]["name"].split(", ")[-1]
-        # grab student email
-        email = students[student]["email"]
+        entry_dict = {}
 
+        #eventually this could probably be a series of function calls that pass these things... womp womp
+        if "name" in include_items:
+            entry_dict[field_name_dict["name"]["fieldname"]] = students[student]["name"].split(", ")[-1]
+        # grab student email
+        if "email" in include_items:
+            entry_dict[field_name_dict["email"]["fieldname"]] = students[student]["email"]
+        
+        if "module" in include_items:
+            entry_dict[field_name_dict["module"]["fieldname"]] = module
+
+        if "assignment_count" in include_items:
+            entry_dict[field_name_dict["assignment_count"]["fieldname"]] = assignment_count
+
+        if "assignment_list" in include_items:
+            entry_dict[field_name_dict["assignment_list"]["fieldname"]] = assignment_list
+
+        
+        
         # for the module, set the total completed to the max that can be. If something isn't complete, mark it as missing, and decrease the count.
-        module_completed = assignment_count
-        for assignment in week_map[current_week]["assignments"]:
-            if is_missing(students[student]["id"], api_dict[assignment]):
-                module_completed -= 1
+        if "module_completed" in include_items:
+            module_completed = assignment_count
+            for assignment in week_map[current_week]["assignments"]:
+                if is_missing(students[student]["id"], api_dict[assignment]):
+                    module_completed -= 1
+            entry_dict[field_name_dict["assignment_list"]["fieldname"]] = module_completed
 
         # same thing as before, BUT we're now going over the entire course. We also keep a record of the names of late assignments.
         # we do this so we can send the students a list of the assignments they can work on.
@@ -309,8 +260,7 @@ def make_emails(current_week):
             late_assignment_list = "In order to catch up, you can complete the following assignments:\n" + late_assignment_list
 
         # this appends everything as it'll go into the export. Pretty clear. 
-        data.append({"Email Address":email, "Student":name, "Module":module, "Assignment Count":assignment_count,
-        "Assignment List":assignmentlist, "Module Completed":module_completed, "Actual Completed Assigments":actualcompleted,
+        data.append({"Assignment List":assignmentlist, "Module Completed":module_completed, "Actual Completed Assigments":actualcompleted,
         "Total Assignments in Course":totalcourse, "Total Complete":totalcomplete, "Late Assignments":late_assignment_list})
     # logic to catch naming conventions based on OS
     if ":" in week_map[week]['name']:
@@ -328,22 +278,16 @@ def make_emails(current_week):
 
 # new function: this is being written to utilize the api to pull assignments, removing the need for the gradebook.
 # other stuff will have to be rewritten, but this is the start of the pipeline.
-def api_scrape():
+def api_scrape() -> None:
 
     keys = ["name", "id", "missingif", "duedate", "duetimestamp", "showonlatelist"]
     defaults = ["No Name Found", 000000, "api", "2016-10-05 12:00:00", 1475683200.0, "True"]
     
-    with open("./userdata/config.json", "r") as readfile:
-        config = json.load(readfile)
-        readfile.close()
+    config = get_config()
 
-    with open("./userdata/assignments.json", "r") as readfile:
-        assignments = json.load(readfile)
-        readfile.close()
+    assignments = get_assignments()
 
-    with open("./userdata/modules.json", "r") as readfile:
-        modules = json.load(readfile)
-        readfile.close()
+    modules = get_week_data()
 
     # a lot of this config reading (which we may add more) can eventually be put somewhere less scoped
     apikey = str(config["API"]["apikey"])
@@ -433,7 +377,7 @@ def api_scrape():
 
 
 # made to get a list of students for the class
-def get_students():
+def get_students() -> None:
     #TODO: Add something that captures the student's section. This may be more involved than the users API.
 
     with open("./userdata/config.json", "r") as readfile:
@@ -517,21 +461,30 @@ def setup_data(args):
 
 # since the config is particularly fiddly, it makes most since to have it be its own subfunc
 # add stuff as needed
-def make_config():
+def make_config() -> None:
+    elements = ["email", "name", "module", "assignment_count", "assignment_list", "module_completed",
+                "actual_completed", "total_course", "total_complete", "late_assignment_list"]
+    default_element_names = ["Email Address", "Student", "Module", "Assignment Count", "Assignment List",
+                             "Module Completed", "Actual Completed Assignments", "Total Assignments in Course",
+                             "Total Complete", "Late Assignments"]
     config = {}
     config['DEFAULT'] = {'placeholder':''}
     config['API'] = {'apikey':'your_api_key_here', 'course':'your_course_here'}
+    config['REPORT'] = {'customization':{}, 'include':{}}
+
+    config['REPORT']['customization'] = {"late_assignment_list": {"prefix": "","postfix": "","late_assignment_item": {"prefix": "","postfix": ""}}}  
+
+    for index, element in enumerate(elements):
+        config['REPORT']['include'][element] = {"fieldname":default_element_names[index]}
+
     with open('./userdata/config.json', 'w') as writefile:
         json.dump(config, writefile, indent=4)
         writefile.close()
 
 def get_week() -> str:
 
-    with open("./userdata/modules.json", "r") as readfile:
-        modules = json.load(readfile)
-        module_names = list(modules.keys())
-        readfile.close()
-    
+    module_names = get_week_names()
+
     print("Which of the following modules do you want to send? All modules prior to the first will be sent.")
 
     for index, module in enumerate(module_names):
@@ -540,7 +493,7 @@ def get_week() -> str:
     input_string = int(input("Enter the number next to the module you want to send: "))
     return module_names[input_string-1]
 
-def canvas_assignment_dump():
+def canvas_assignment_dump() -> None:
     with open("./userdata/config.json", "r") as readfile:
         config = json.load(readfile)
         readfile.close()
@@ -556,7 +509,7 @@ def canvas_assignment_dump():
 
 # A Function that allows command line editing of the modules. Primarily intended to be used to combine modules from the course. 
 # Can also be used for renames, cleanup, etc. A generally useful function.
-def combine_modules(weeks, newname):
+def combine_modules(weeks, newname) -> None:
     # Bit of fluff for reading
     print("\n")
 
@@ -586,11 +539,7 @@ def combine_modules(weeks, newname):
 def get_weeks() -> list:
 
     # Read modules and get names...
-    with open("./userdata/modules.json", "r") as readfile:
-        modules = json.load(readfile)
-        module_names = list(modules.keys())
-        readfile.close()
-
+    module_names = get_week_names()
     # Print out the indicides for each module and their name; note the +1
     for index, module in enumerate(module_names):
         print(f"{index+1}) {module}")
@@ -723,5 +672,34 @@ def get_assignments() -> dict:
         file.close()
     return assignment_dict
 
+def get_assignments_names() -> list:
+    with open("./userdata/assignments.json", "r") as readfile:
+        assignment_dict = json.load(readfile)
+        assignment_names = list(assignment_dict.keys())
+        readfile.close()
+    return assignment_names
 
-    
+def get_student_ids() -> list:
+    with open("./userdata/students.json", "r") as readfile:
+        students_dict = json.load(readfile)
+        student_ids = list(students_dict.keys())
+        readfile.close()
+    return student_ids
+
+def get_student_data() -> dict:
+    with open("./userdata/students.json", "r") as readfile:
+        students_dict = json.load(readfile)
+        readfile.close()
+    return students_dict
+
+def get_config() -> dict:
+    with open("./userdata/config.json", "r") as readfile:
+        config = json.load(readfile)
+        readfile.close()
+    return config
+
+def get_api_data() -> dict:
+    with open("./userdata/api.json", "r") as file:
+        api_dict = json.load(file)
+        file.close()
+    return api_dict
